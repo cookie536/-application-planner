@@ -4,18 +4,28 @@ import { useId, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCommonDocuments } from "@/app/common-documents-context";
-
-const fieldClassName =
-  "mt-1.5 w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-[15px] text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-400";
-
-const labelClassName =
-  "text-xs font-medium uppercase tracking-wide text-zinc-400";
+import { displayCategory } from "@/app/ui-copy";
+import {
+  areaClass,
+  backLinkClass,
+  cardClass,
+  cardTitleClass,
+  fieldClass,
+  labelClass,
+  leadClass,
+  overlayClass,
+  pageClass,
+  primaryButtonClass,
+  secondaryButtonClass,
+  shellClass,
+  titleClass,
+} from "@/app/ui";
 
 function formatDate(date: string) {
   const parsed = new Date(date);
   if (Number.isNaN(parsed.getTime())) return date;
 
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("zh-CN", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -24,7 +34,7 @@ function formatDate(date: string) {
 
 export default function CommonDocumentDetailPage() {
   const params = useParams<{ documentId: string }>();
-  const { getDocument, addDocumentVersion } = useCommonDocuments();
+  const { getDocument, addDocumentVersion, hasHydrated } = useCommonDocuments();
   const document = getDocument(params.documentId);
   const [isAddVersionOpen, setIsAddVersionOpen] = useState(false);
   const [fileName, setFileName] = useState("");
@@ -48,146 +58,130 @@ export default function CommonDocumentDetailPage() {
     closeAddVersion();
   }
 
+  if (!hasHydrated) {
+    return <div className={pageClass} />;
+  }
+
   if (!document) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center bg-[#f5f5f7] px-6 py-16">
-        <p className="text-lg text-zinc-600">Document not found.</p>
-        <Link
-          href="/common-documents"
-          className="mt-6 text-sm font-medium text-zinc-900 hover:underline"
-        >
-          ← Back to Common Documents
+        <p className="text-lg text-zinc-600">未找到该材料。</p>
+        <Link href="/common-documents" className={`${primaryButtonClass} mt-6`}>
+          返回通用材料
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-1 flex-col bg-[#f5f5f7]">
-      <div className="mx-auto w-full max-w-3xl px-6 py-10 sm:px-8 sm:py-14">
-        <Link
-          href="/common-documents"
-          className="text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800"
-        >
-          ← Back to Common Documents
-        </Link>
-
-        <div className="mt-6">
-          <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">
-            {document.category}
+    <div className={pageClass}>
+      <div className={`${shellClass} flex flex-col gap-4`}>
+        <header>
+          <Link href="/common-documents" className={backLinkClass}>
+            ← 返回通用材料
+          </Link>
+          <span className="mt-4 inline-flex h-7 items-center rounded-full bg-zinc-100 px-2.5 text-sm font-medium text-zinc-600">
+            {displayCategory(document.category)}
           </span>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-zinc-900 sm:text-4xl">
-            {document.name}
-          </h1>
-          {document.note ? (
-            <p className="mt-3 text-[15px] leading-relaxed text-zinc-600">
-              {document.note}
-            </p>
-          ) : null}
-        </div>
+          <h1 className={`mt-3 ${titleClass}`}>{document.name}</h1>
+          {document.note ? <p className={leadClass}>{document.note}</p> : null}
+        </header>
 
-        <section className="mt-10">
+        <section className={cardClass}>
           <div className="flex items-center justify-between gap-4">
-            <h2 className="text-xl font-semibold tracking-tight text-zinc-900">
-              Versions
-            </h2>
-            <button
-              type="button"
-              onClick={() => setIsAddVersionOpen(true)}
-              className="shrink-0 rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-zinc-800"
-            >
-              + Add Version
-            </button>
+            <h2 className={cardTitleClass}>版本</h2>
+            {document.versions.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setIsAddVersionOpen(true)}
+                className={primaryButtonClass}
+              >
+                添加版本
+              </button>
+            ) : null}
           </div>
 
-          <div className="mt-6 grid gap-4">
-            {document.versions.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-zinc-200 bg-white px-6 py-10 text-center text-[15px] text-zinc-500">
-                No versions yet. Add a file placeholder to get started.
-              </p>
-            ) : (
-              document.versions.map((version) => (
-                <article
-                  key={version.id}
-                  className="rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"
-                >
-                  <h3 className="text-lg font-semibold text-zinc-900">
-                    {version.fileName}
-                  </h3>
-                  <p className="mt-1 text-sm text-zinc-500">
+          {document.versions.length === 0 ? (
+            <div className="mt-6 text-center">
+              <p className="text-[15px] text-zinc-500">暂无版本。添加第一条版本记录。</p>
+              <button
+                type="button"
+                onClick={() => setIsAddVersionOpen(true)}
+                className={`${primaryButtonClass} mt-5`}
+              >
+                添加版本
+              </button>
+            </div>
+          ) : (
+            <ol className="relative mt-5 border-l border-zinc-200 pl-6">
+              {document.versions.map((version) => (
+                <li key={version.id} className="relative pb-6 last:pb-0">
+                  <span
+                    className="absolute -left-[29px] top-1.5 size-2.5 rounded-full bg-zinc-900"
+                    aria-hidden="true"
+                  />
+                  <p className="text-sm font-medium text-zinc-500">
                     {formatDate(version.date)}
                   </p>
-                  {version.note ? (
-                    <p className="mt-3 text-[15px] leading-relaxed text-zinc-600">
-                      {version.note}
-                    </p>
-                  ) : null}
-                  <div className="mt-4 flex items-center gap-3 rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-3">
-                    <div className="flex size-9 items-center justify-center rounded-lg bg-white text-xs font-semibold text-zinc-400 shadow-sm">
-                      FILE
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-zinc-800">
-                        {version.fileName}
-                      </p>
-                      <p className="text-xs text-zinc-400">
-                        Placeholder — upload coming soon
-                      </p>
-                    </div>
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
+                  <h3 className="mt-1 text-[15px] font-semibold text-zinc-950">
+                    {version.fileName}
+                  </h3>
+                  <p className="mt-1 text-[15px] leading-relaxed text-zinc-600">
+                    {version.note?.trim() || "未填写"}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )}
         </section>
       </div>
 
       {isAddVersionOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-8 backdrop-blur-sm sm:px-6"
+          className={overlayClass}
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
           onClick={closeAddVersion}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_16px_48px_rgba(0,0,0,0.18)] sm:p-8"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_16px_48px_rgba(0,0,0,0.16)] sm:p-8"
             onClick={(event) => event.stopPropagation()}
           >
             <h2
               id={titleId}
               className="text-xl font-semibold tracking-tight text-zinc-900"
             >
-              Add Version
+              添加版本
             </h2>
 
             <div className="mt-6 space-y-5">
               <div>
-                <label htmlFor="version-file" className={labelClassName}>
-                  File name
+                <label htmlFor="version-file" className={labelClass}>
+                  文件名
                 </label>
                 <input
                   id="version-file"
                   type="text"
                   value={fileName}
                   onChange={(event) => setFileName(event.target.value)}
-                  placeholder="e.g. IELTS_2026.pdf"
-                  className={fieldClassName}
+                  placeholder="例如：成绩单.pdf"
+                  className={fieldClass}
                   autoFocus
                 />
               </div>
 
               <div>
-                <label htmlFor="version-note" className={labelClassName}>
-                  Note
+                <label htmlFor="version-note" className={labelClass}>
+                  备注
                 </label>
                 <textarea
                   id="version-note"
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
-                  placeholder="Optional note"
+                  placeholder="选填备注"
                   rows={3}
-                  className={`${fieldClassName} resize-none`}
+                  className={areaClass}
                 />
               </div>
             </div>
@@ -196,16 +190,16 @@ export default function CommonDocumentDetailPage() {
               <button
                 type="button"
                 onClick={closeAddVersion}
-                className="flex-1 rounded-full border border-zinc-200 px-5 py-2.5 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50"
+                className={`${secondaryButtonClass} flex-1`}
               >
-                Cancel
+                取消
               </button>
               <button
                 type="button"
                 onClick={saveVersion}
-                className="flex-1 rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+                className={`${primaryButtonClass} flex-1`}
               >
-                Add Version
+                添加版本
               </button>
             </div>
           </div>

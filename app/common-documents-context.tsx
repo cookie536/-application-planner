@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -27,14 +28,17 @@ export type CommonDocument = {
 };
 
 export const DOCUMENT_CATEGORIES = [
-  "Transcript",
-  "Language Test",
-  "Identity",
-  "Certificate",
-  "Other",
+  "成绩单",
+  "语言成绩",
+  "身份证明",
+  "证书",
+  "其他",
 ] as const;
 
-const COMMON_DOCUMENTS_STORAGE_KEY = "ai-application-planner:common-documents";
+const COMMON_DOCUMENTS_STORAGE_KEY =
+  "ai-application-planner:common-documents:v2";
+const LEGACY_COMMON_DOCUMENTS_STORAGE_KEY =
+  "ai-application-planner:common-documents";
 
 function createId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
@@ -42,90 +46,7 @@ function createId(prefix: string) {
 
 export { createId as createCommonDocumentId };
 
-export const initialDocuments: CommonDocument[] = [
-  {
-    id: "doc-transcript",
-    name: "Transcript",
-    category: "Transcript",
-    note: "Official academic transcript for all applications.",
-    uploadDate: "2026-03-12",
-    versions: [
-      {
-        id: "doc-transcript-v1",
-        fileName: "Transcript_v1.pdf",
-        date: "2025-11-02",
-        note: "Undergraduate transcript draft.",
-      },
-      {
-        id: "doc-transcript-v2",
-        fileName: "Transcript_v2.pdf",
-        date: "2026-03-12",
-        note: "Updated with latest semester grades.",
-      },
-    ],
-  },
-  {
-    id: "doc-ielts",
-    name: "IELTS",
-    category: "Language Test",
-    note: "English proficiency score report.",
-    uploadDate: "2026-01-20",
-    versions: [
-      {
-        id: "doc-ielts-v1",
-        fileName: "IELTS_2025.pdf",
-        date: "2025-06-18",
-      },
-      {
-        id: "doc-ielts-v2",
-        fileName: "IELTS_2026.pdf",
-        date: "2026-01-20",
-        note: "Retake with improved overall band.",
-      },
-    ],
-  },
-  {
-    id: "doc-passport",
-    name: "Passport",
-    category: "Identity",
-    note: "Passport bio page scan.",
-    uploadDate: "2025-12-01",
-    versions: [
-      {
-        id: "doc-passport-v1",
-        fileName: "Passport_scan.pdf",
-        date: "2025-12-01",
-      },
-    ],
-  },
-  {
-    id: "doc-id-card",
-    name: "ID Card",
-    category: "Identity",
-    uploadDate: "2025-10-08",
-    versions: [
-      {
-        id: "doc-id-v1",
-        fileName: "ID_Card_front_back.pdf",
-        date: "2025-10-08",
-      },
-    ],
-  },
-  {
-    id: "doc-enrollment",
-    name: "Enrollment Certificate",
-    category: "Certificate",
-    note: "Current enrollment verification letter.",
-    uploadDate: "2026-02-05",
-    versions: [
-      {
-        id: "doc-enrollment-v1",
-        fileName: "Enrollment_Certificate.pdf",
-        date: "2026-02-05",
-      },
-    ],
-  },
-];
+export const initialDocuments: CommonDocument[] = [];
 
 function readStoredDocuments(): CommonDocument[] | null {
   if (typeof window === "undefined") return null;
@@ -142,6 +63,7 @@ function readStoredDocuments(): CommonDocument[] | null {
 
 type CommonDocumentsContextValue = {
   documents: CommonDocument[];
+  hasHydrated: boolean;
   getDocument: (documentId: string) => CommonDocument | undefined;
   getDocumentVersion: (
     documentId: string,
@@ -171,10 +93,12 @@ const CommonDocumentsContext =
   createContext<CommonDocumentsContextValue | null>(null);
 
 export function CommonDocumentsProvider({ children }: { children: ReactNode }) {
-  const [documents, setDocuments] = useState(initialDocuments);
+  const [documents, setDocuments] = useState<CommonDocument[]>([]);
   const [hasHydrated, setHasHydrated] = useState(false);
+  const persistReady = useRef(false);
 
   useEffect(() => {
+    window.localStorage.removeItem(LEGACY_COMMON_DOCUMENTS_STORAGE_KEY);
     const stored = readStoredDocuments();
     if (stored) setDocuments(stored);
     setHasHydrated(true);
@@ -182,6 +106,10 @@ export function CommonDocumentsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hasHydrated) return;
+    if (!persistReady.current) {
+      persistReady.current = true;
+      return;
+    }
     window.localStorage.setItem(
       COMMON_DOCUMENTS_STORAGE_KEY,
       JSON.stringify(documents),
@@ -278,6 +206,7 @@ export function CommonDocumentsProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       documents,
+      hasHydrated,
       getDocument,
       getDocumentVersion,
       addDocument,
@@ -287,6 +216,7 @@ export function CommonDocumentsProvider({ children }: { children: ReactNode }) {
     }),
     [
       documents,
+      hasHydrated,
       getDocument,
       getDocumentVersion,
       addDocument,

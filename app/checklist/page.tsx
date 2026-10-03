@@ -1,22 +1,26 @@
 import Link from "next/link";
+import { EmptyState, leadClass, pageClass, primaryButtonClass, shellClass, titleClass } from "@/app/ui";
 
 export default function ChecklistPage() {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center bg-white px-6 py-16">
-      <main className="flex w-full max-w-2xl flex-col items-center text-center">
-        <h1 className="text-4xl font-semibold tracking-tight text-zinc-900 sm:text-5xl">
-          Checklist
-        </h1>
-        <p className="mt-4 text-lg text-zinc-500 sm:text-xl">
-          Stay on top of required materials and tasks.
-        </p>
-        <Link
-          href="/"
-          className="mt-10 inline-flex h-12 items-center justify-center rounded-xl border border-zinc-200 px-6 text-base font-medium text-zinc-900 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
-        >
-          Back to Home
-        </Link>
-      </main>
+    <div className={pageClass}>
+      <div className={shellClass}>
+        <header>
+          <h1 className={titleClass}>材料</h1>
+          <p className={leadClass}>跟进每份申请所需的材料和任务。</p>
+        </header>
+        <div className="mt-8">
+          <EmptyState
+            title="暂无材料"
+            description="打开一份申请，在材料一栏添加成绩单、语言成绩或护照。"
+            action={
+              <Link href="/dashboard" className={primaryButtonClass}>
+                前往主页
+              </Link>
+            }
+          />
+        </div>
+      </div>
     </div>
   );
 }

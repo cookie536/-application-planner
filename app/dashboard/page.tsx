@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   createId,
@@ -9,6 +9,28 @@ import {
   type Application,
   type ChecklistItem,
 } from "@/app/applications-context";
+import { useCommonDocuments } from "@/app/common-documents-context";
+import { searchPrograms, type ProgramRecord } from "@/app/programs";
+import { DEFAULT_STATUSES, displayCategory, displayStatus } from "@/app/ui-copy";
+import {
+  chipClass,
+  chipSelectedClass,
+  dangerButtonClass,
+  dialogBodyClass,
+  dialogClass,
+  dialogFooterClass,
+  EmptyState,
+  fieldClass,
+  labelClass,
+  overlayClass,
+  pageClass,
+  primaryButtonClass,
+  quietButtonClass,
+  secondaryButtonClass,
+  shellWideClass,
+  statusPillClass,
+  titleClass,
+} from "@/app/ui";
 
 type EditDraft = {
   school: string;
@@ -21,20 +43,11 @@ type EditDraft = {
   customStatus: string;
 };
 
-const DEFAULT_STATUSES = [
-  "Draft",
-  "Submitted",
-  "Waiting",
-  "Interview",
-  "Offer",
-  "Rejected",
-] as const;
-
 function formatDeadline(deadline: string) {
   const date = new Date(deadline);
-  if (Number.isNaN(date.getTime())) return deadline;
+  if (!deadline || Number.isNaN(date.getTime())) return "未填写";
 
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("zh-CN", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -43,43 +56,68 @@ function formatDeadline(deadline: string) {
   }).format(date);
 }
 
+function daysRemainingLabel(deadline: string) {
+  const due = new Date(deadline);
+  if (!deadline || Number.isNaN(due.getTime())) return "未填写";
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDay = new Date(due);
+  dueDay.setHours(0, 0, 0, 0);
+  const days = Math.round((dueDay.getTime() - today.getTime()) / 86_400_000);
+
+  if (days > 0) return `还有${days}天`;
+  if (days === 0) return "今天截止";
+  return `已逾期${Math.abs(days)}天`;
+}
+
 function toEditDraft(app: Application): EditDraft {
-  const isDefault = (DEFAULT_STATUSES as readonly string[]).includes(app.status);
+  const status = displayStatus(app.status);
+  const isDefault = (DEFAULT_STATUSES as readonly string[]).includes(status);
 
   return {
     school: app.school,
     program: app.program,
     country: app.country,
-    status: app.status,
+    status,
     deadline: app.deadline,
     checklist: app.checklist.map((item) => ({
       ...item,
       versions: item.versions.map((version) => ({ ...version })),
     })),
     useCustomStatus: !isDefault,
-    customStatus: isDefault ? "" : app.status,
+    customStatus: isDefault ? "" : status,
   };
 }
-
-const fieldClassName =
-  "mt-1.5 w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-[15px] text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-400";
-
-const labelClassName =
-  "text-xs font-medium uppercase tracking-wide text-zinc-400";
 
 export default function DashboardPage() {
   const {
     applications,
+    hasHydrated,
+    addApplication,
     toggleChecklistItem,
     updateApplication,
     deleteApplication,
   } = useApplications();
+  const { documents, hasHydrated: documentsHydrated } = useCommonDocuments();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [programQuery, setProgramQuery] = useState("");
+  const [isCustomOpen, setIsCustomOpen] = useState(false);
+  const [customSchool, setCustomSchool] = useState("");
+  const [customProgram, setCustomProgram] = useState("");
+  const [customCountry, setCustomCountry] = useState("");
+  const [customWebsite, setCustomWebsite] = useState("");
+  const [customDeadline, setCustomDeadline] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<EditDraft | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
+  const addTitleId = useId();
+  const programResults = useMemo(
+    () => searchPrograms(programQuery),
+    [programQuery],
+  );
 
   useEffect(() => {
     if (!openMenuId) return;
@@ -96,6 +134,7 @@ export default function DashboardPage() {
 
   function openEdit(app: Application) {
     setOpenMenuId(null);
+    setIsAddModalOpen(false);
     setEditingId(app.id);
     setDraft(toEditDraft(app));
   }
@@ -183,6 +222,8 @@ export default function DashboardPage() {
                 id: createId("mat"),
                 label: "",
                 done: false,
+                status: "草稿",
+                notes: [],
                 source: "project",
                 versions: [],
               },
@@ -192,43 +233,101 @@ export default function DashboardPage() {
     );
   }
 
+  function openAdd() {
+    closeEdit();
+    setProgramQuery("");
+    setIsAddModalOpen(true);
+  }
+
+  function closeAdd() {
+    setIsAddModalOpen(false);
+    setProgramQuery("");
+    setIsCustomOpen(false);
+    setCustomSchool("");
+    setCustomProgram("");
+    setCustomCountry("");
+    setCustomWebsite("");
+    setCustomDeadline("");
+  }
+
+  function saveCustomApplication() {
+    const school = customSchool.trim();
+    if (!school) return;
+
+    addApplication({
+      school,
+      program: customProgram.trim(),
+      country: customCountry.trim(),
+      status: "草稿",
+      deadline: customDeadline,
+      checklist: [],
+      website: customWebsite.trim(),
+      tuition: "",
+      duration: "",
+      languageRequirement: "",
+    });
+    closeAdd();
+  }
+
+  function selectProgram(program: ProgramRecord) {
+    addApplication({
+      school: program.school,
+      program: program.program,
+      country: program.country,
+      status: "草稿",
+      deadline: program.deadline,
+      checklist: [],
+      website: program.website,
+      tuition: program.tuition,
+      duration: program.duration,
+      languageRequirement: program.languageRequirement,
+    });
+    closeAdd();
+  }
+
+  if (!hasHydrated || !documentsHydrated) {
+    return <div className={pageClass} />;
+  }
+
   return (
-    <div className="flex flex-1 flex-col bg-[#f5f5f7]">
-      <div className="mx-auto w-full max-w-5xl px-6 py-10 sm:px-8 sm:py-14">
+    <div className={pageClass}>
+      <div className={shellWideClass}>
         <header className="flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <Link
-              href="/"
-              className="text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800"
-            >
-              ← Home
-            </Link>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-zinc-900 sm:text-4xl">
-              AI Application Planner
-            </h1>
+            <h1 className={titleClass}>申请规划</h1>
           </div>
           <div className="flex shrink-0 items-center gap-3">
-            <Link
-              href="/common-documents"
-              className="rounded-full border border-zinc-200 bg-white px-5 py-2.5 text-sm font-medium text-zinc-800 shadow-sm transition-colors hover:bg-zinc-50"
-            >
-              通用材料库
+            <Link href="/common-documents" className={secondaryButtonClass}>
+              通用材料
             </Link>
-            <button
-              type="button"
-              onClick={() => setIsAddModalOpen(true)}
-              className="rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-zinc-800"
-            >
-              + Add Application
-            </button>
+            {applications.length > 0 ? (
+              <button type="button" onClick={openAdd} className={primaryButtonClass}>
+                添加申请
+              </button>
+            ) : null}
           </div>
         </header>
 
-        <section className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {applications.map((app) => (
+        {applications.length === 0 ? (
+          <div className="mt-8">
+            <EmptyState
+              title="暂无申请"
+              description="创建第一份申请，开始跟踪截止日期、材料和进度。"
+              action={
+                <button type="button" onClick={openAdd} className={primaryButtonClass}>
+                  添加申请
+                </button>
+              }
+            />
+          </div>
+        ) : (
+        <section className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {applications.map((app) => {
+            const status = displayStatus(app.status);
+            return (
             <article
               key={app.id}
-              className="relative flex flex-col rounded-2xl border border-black/[0.04] bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"
+              className="relative flex flex-col rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:p-6"
             >
               <div
                 className="absolute right-4 top-4"
@@ -236,7 +335,7 @@ export default function DashboardPage() {
               >
                 <button
                   type="button"
-                  aria-label="Application options"
+                  aria-label="申请选项"
                   aria-expanded={openMenuId === app.id}
                   aria-haspopup="menu"
                   onClick={() =>
@@ -254,7 +353,7 @@ export default function DashboardPage() {
                 {openMenuId === app.id ? (
                   <div
                     role="menu"
-                    className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+                    className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-xl bg-white py-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)] ring-1 ring-black/5"
                   >
                     <button
                       type="button"
@@ -262,59 +361,72 @@ export default function DashboardPage() {
                       onClick={() => openEdit(app)}
                       className="block w-full px-3.5 py-2.5 text-left text-sm text-zinc-800 transition-colors hover:bg-zinc-50"
                     >
-                      Edit Application
+                      编辑申请
                     </button>
+                    <Link
+                      href={`/applications/${app.id}`}
+                      role="menuitem"
+                      className="block w-full px-3.5 py-2.5 text-left text-sm text-zinc-800 transition-colors hover:bg-zinc-50"
+                    >
+                      打开工作台
+                    </Link>
                     <button
                       type="button"
                       role="menuitem"
                       onClick={() => handleDeleteApplication(app.id)}
                       className="block w-full px-3.5 py-2.5 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
                     >
-                      Delete Application
+                      删除申请
                     </button>
                   </div>
                 ) : null}
               </div>
 
-              <div className="space-y-3 pr-8">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
-                    School
+              <div className="pr-8">
+                <Link href={`/applications/${app.id}`} className="block">
+                  <h2 className="text-xl font-semibold tracking-tight text-zinc-950">
+                    {app.school.trim() || "未填写"}
+                  </h2>
+                  <p className="mt-1 text-base font-medium text-zinc-800">
+                    {app.program.trim() || "未填写"}
                   </p>
-                  <p className="mt-1 text-lg font-semibold text-zinc-900">
-                    {app.school}
+                  <p className="mt-1 text-sm text-zinc-500">
+                    {app.country.trim() || "未填写"}
                   </p>
-                </div>
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
-                    Program
-                  </p>
-                  <p className="mt-1 text-[15px] text-zinc-700">{app.program}</p>
-                </div>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
-                      Status
-                    </p>
-                    <p className="mt-1 text-[15px] text-zinc-700">{app.status}</p>
+                  <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
+                    <span
+                      className={`inline-flex h-7 items-center rounded-full px-2.5 text-sm font-medium ${statusPillClass(status)}`}
+                    >
+                      {status || "未填写"}
+                    </span>
+                    <div className="text-right">
+                      <p className="text-[13px] text-zinc-400">截止日期</p>
+                      <p className="text-sm font-medium text-zinc-950">
+                        {formatDeadline(app.deadline)}
+                      </p>
+                      <p className="mt-1 text-[13px] text-zinc-400">剩余天数</p>
+                      <p className="text-sm text-zinc-600">
+                        {daysRemainingLabel(app.deadline)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
-                      Deadline
-                    </p>
-                    <p className="mt-1 text-[15px] font-medium text-zinc-900">
-                      {formatDeadline(app.deadline)}
-                    </p>
-                  </div>
-                </div>
+                </Link>
               </div>
 
-              <div className="mt-6 border-t border-zinc-100 pt-5">
-                <p className="text-xs font-medium uppercase tracking-wide text-zinc-400">
-                  Checklist
+              {app.checklist.length === 0 ? (
+                <p className="mt-5 text-sm text-zinc-400">
+                  暂无材料。打开申请后可以添加。
                 </p>
+              ) : (
+              <div className="mt-5">
+                <p className="text-[13px] font-medium text-zinc-400">材料</p>
                 <ul className="mt-3 space-y-2.5">
-                  {app.checklist.map((item) => (
+                  {app.checklist.map((item) => {
+                    const shared = isCommonLinkedMaterial(item)
+                      ? documents.find((doc) => doc.id === item.commonDocumentId)
+                      : undefined;
+                    const title = shared?.name || item.label;
+                    return (
                     <li
                       key={item.id}
                       className="flex items-center gap-3 text-[15px] text-zinc-800"
@@ -324,7 +436,7 @@ export default function DashboardPage() {
                         checked={item.done}
                         onChange={() => toggleChecklistItem(app.id, item.id)}
                         className="size-4 rounded border-zinc-300 text-zinc-900 accent-zinc-900"
-                        aria-label={`Mark ${item.label} complete`}
+                        aria-label={`将${title}标为完成`}
                       />
                       <Link
                         href={`/applications/${app.id}/materials/${item.id}`}
@@ -332,7 +444,12 @@ export default function DashboardPage() {
                           item.done ? "text-zinc-500 line-through" : ""
                         }`}
                       >
-                        {item.label}
+                        {title}
+                        {shared ? (
+                          <span className="ml-1.5 text-xs font-normal text-zinc-400 no-underline">
+                            · {displayCategory(shared.category)}
+                          </span>
+                        ) : null}
                         <span
                           className={`ml-1.5 text-xs font-normal no-underline ${
                             item.done ? "text-zinc-400" : "text-zinc-400"
@@ -345,67 +462,201 @@ export default function DashboardPage() {
                         </span>
                       </Link>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </div>
+              )}
             </article>
-          ))}
+            );
+          })}
         </section>
+        )}
       </div>
 
       {isAddModalOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-6 backdrop-blur-sm"
+          className={overlayClass}
           role="dialog"
           aria-modal="true"
-          aria-labelledby="add-application-title"
-          onClick={() => setIsAddModalOpen(false)}
+          aria-labelledby={addTitleId}
+          onClick={closeAdd}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-white p-8 shadow-[0_16px_48px_rgba(0,0,0,0.18)]"
+            className={dialogClass}
             onClick={(event) => event.stopPropagation()}
           >
-            <h2
-              id="add-application-title"
-              className="text-xl font-semibold tracking-tight text-zinc-900"
-            >
-              Application Form Coming Soon.
-            </h2>
-            <button
-              type="button"
-              onClick={() => setIsAddModalOpen(false)}
-              className="mt-8 w-full rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
-            >
-              Close
-            </button>
+            <div className={dialogBodyClass}>
+              <h2
+                id={addTitleId}
+                className="text-xl font-semibold tracking-tight text-zinc-950"
+              >
+                添加申请
+              </h2>
+              {isCustomOpen ? null : (
+              <div className="mt-6">
+                <label htmlFor="program-search" className={labelClass}>
+                  搜索学校或项目
+                </label>
+                <input
+                  id="program-search"
+                  type="text"
+                  value={programQuery}
+                  onChange={(event) => setProgramQuery(event.target.value)}
+                  placeholder="例如：HKU 或 Sociology"
+                  className={fieldClass}
+                  autoFocus
+                />
+              </div>
+              )}
+              {isCustomOpen ? (
+                <div className="mt-6 space-y-5">
+                  <div>
+                    <label htmlFor="custom-school" className={labelClass}>
+                      学校 *
+                    </label>
+                    <input
+                      id="custom-school"
+                      type="text"
+                      value={customSchool}
+                      onChange={(event) => setCustomSchool(event.target.value)}
+                      className={fieldClass}
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="custom-program" className={labelClass}>
+                      项目
+                    </label>
+                    <input
+                      id="custom-program"
+                      type="text"
+                      value={customProgram}
+                      onChange={(event) => setCustomProgram(event.target.value)}
+                      className={fieldClass}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="custom-country" className={labelClass}>
+                      国家
+                    </label>
+                    <input
+                      id="custom-country"
+                      type="text"
+                      value={customCountry}
+                      onChange={(event) => setCustomCountry(event.target.value)}
+                      className={fieldClass}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="custom-website" className={labelClass}>
+                      官方网站
+                    </label>
+                    <input
+                      id="custom-website"
+                      type="url"
+                      value={customWebsite}
+                      onChange={(event) => setCustomWebsite(event.target.value)}
+                      placeholder="例如：https://"
+                      className={fieldClass}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="custom-deadline" className={labelClass}>
+                      截止日期
+                    </label>
+                    <input
+                      id="custom-deadline"
+                      type="datetime-local"
+                      value={customDeadline}
+                      onChange={(event) => setCustomDeadline(event.target.value)}
+                      className={fieldClass}
+                    />
+                  </div>
+                </div>
+              ) : (
+              <ul className="mt-4 space-y-1">
+                {programResults.length === 0 ? (
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomOpen(true)}
+                      className="w-full rounded-xl px-3 py-3 text-left text-[15px] font-medium text-zinc-800 transition-colors hover:bg-zinc-50"
+                    >
+                      + 创建自定义申请
+                    </button>
+                  </li>
+                ) : (
+                  programResults.map((program) => (
+                    <li key={program.id}>
+                      <button
+                        type="button"
+                        onClick={() => selectProgram(program)}
+                        className="w-full rounded-xl px-3 py-3 text-left transition-colors hover:bg-zinc-50"
+                      >
+                        <p className="text-[15px] font-semibold text-zinc-950">
+                          {program.school}
+                        </p>
+                        <p className="mt-0.5 text-[15px] text-zinc-700">
+                          {program.program}
+                        </p>
+                        <p className="mt-0.5 text-sm text-zinc-500">
+                          {program.country}
+                        </p>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+              )}
+            </div>
+            <div className={dialogFooterClass}>
+              <button
+                type="button"
+                onClick={closeAdd}
+                className={`${secondaryButtonClass} flex-1`}
+              >
+                取消
+              </button>
+              {isCustomOpen ? (
+                <button
+                  type="button"
+                  onClick={saveCustomApplication}
+                  disabled={!customSchool.trim()}
+                  className={`${primaryButtonClass} flex-1`}
+                >
+                  保存
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
       ) : null}
 
       {editingId && draft ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-8 backdrop-blur-sm sm:px-6"
+          className={overlayClass}
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
           onClick={closeEdit}
         >
           <div
-            className="flex max-h-full w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-[0_16px_48px_rgba(0,0,0,0.18)]"
+            className={dialogClass}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="overflow-y-auto px-6 py-7 sm:px-8">
+            <div className={dialogBodyClass}>
               <h2
                 id={titleId}
                 className="text-xl font-semibold tracking-tight text-zinc-900"
               >
-                Edit Application
+                编辑申请
               </h2>
 
               <div className="mt-6 space-y-5">
                 <div>
-                  <label htmlFor="edit-school" className={labelClassName}>
-                    School
+                  <label htmlFor="edit-school" className={labelClass}>
+                    学校
                   </label>
                   <input
                     id="edit-school"
@@ -414,13 +665,13 @@ export default function DashboardPage() {
                     onChange={(event) =>
                       updateDraft({ school: event.target.value })
                     }
-                    className={fieldClassName}
+                    className={fieldClass}
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="edit-program" className={labelClassName}>
-                    Program
+                  <label htmlFor="edit-program" className={labelClass}>
+                    项目
                   </label>
                   <input
                     id="edit-program"
@@ -429,13 +680,13 @@ export default function DashboardPage() {
                     onChange={(event) =>
                       updateDraft({ program: event.target.value })
                     }
-                    className={fieldClassName}
+                    className={fieldClass}
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="edit-country" className={labelClassName}>
-                    Country
+                  <label htmlFor="edit-country" className={labelClass}>
+                    国家或地区
                   </label>
                   <input
                     id="edit-country"
@@ -444,13 +695,13 @@ export default function DashboardPage() {
                     onChange={(event) =>
                       updateDraft({ country: event.target.value })
                     }
-                    className={fieldClassName}
+                    className={fieldClass}
                   />
                 </div>
 
                 <div>
-                  <label htmlFor="edit-deadline" className={labelClassName}>
-                    Deadline
+                  <label htmlFor="edit-deadline" className={labelClass}>
+                    截止日期
                   </label>
                   <input
                     id="edit-deadline"
@@ -459,12 +710,12 @@ export default function DashboardPage() {
                     onChange={(event) =>
                       updateDraft({ deadline: event.target.value })
                     }
-                    className={fieldClassName}
+                    className={fieldClass}
                   />
                 </div>
 
                 <div>
-                  <p className={labelClassName}>Status</p>
+                  <p className={labelClass}>状态</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {DEFAULT_STATUSES.map((status) => {
                       const selected =
@@ -481,11 +732,7 @@ export default function DashboardPage() {
                               customStatus: "",
                             })
                           }
-                          className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                            selected
-                              ? "bg-zinc-900 text-white"
-                              : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200"
-                          }`}
+                          className={selected ? chipSelectedClass : chipClass}
                         >
                           {status}
                         </button>
@@ -502,9 +749,9 @@ export default function DashboardPage() {
                           customStatus: draft.customStatus || "",
                         })
                       }
-                      className="mt-3 text-sm font-medium text-zinc-700 transition-colors hover:text-zinc-900"
+                      className={`mt-3 ${quietButtonClass}`}
                     >
-                      + Add custom status
+                      添加自定义状态
                     </button>
                   ) : (
                     <div className="mt-3 space-y-2">
@@ -514,8 +761,8 @@ export default function DashboardPage() {
                         onChange={(event) =>
                           updateDraft({ customStatus: event.target.value })
                         }
-                        placeholder='e.g. "Waiting for Recommendation"'
-                        className={fieldClassName}
+                        placeholder="例如：等待推荐信"
+                        className={fieldClass}
                         autoFocus
                       />
                       <button
@@ -523,20 +770,20 @@ export default function DashboardPage() {
                         onClick={() =>
                           updateDraft({
                             useCustomStatus: false,
-                            status: draft.status || "Draft",
+                            status: draft.status || "草稿",
                             customStatus: "",
                           })
                         }
-                        className="text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800"
+                        className={quietButtonClass}
                       >
-                        Use default statuses
+                        使用默认状态
                       </button>
                     </div>
                   )}
                 </div>
 
                 <div>
-                  <p className={labelClassName}>Required Materials</p>
+                  <p className={labelClass}>所需材料</p>
                   <ul className="mt-3 space-y-2.5">
                     {draft.checklist.map((item) => (
                       <li key={item.id} className="flex items-center gap-2.5">
@@ -547,7 +794,7 @@ export default function DashboardPage() {
                             updateMaterial(item.id, { done: !item.done })
                           }
                           className="size-4 shrink-0 rounded border-zinc-300 text-zinc-900 accent-zinc-900"
-                          aria-label={`Mark ${item.label || "material"} complete`}
+                          aria-label={`将${item.label || "材料"}标为完成`}
                         />
                         <input
                           type="text"
@@ -557,16 +804,16 @@ export default function DashboardPage() {
                               label: event.target.value,
                             })
                           }
-                          placeholder="Material name"
-                          className="min-w-0 flex-1 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[15px] text-zinc-900 outline-none transition-colors focus:border-zinc-400"
+                          placeholder="材料名称"
+                          className={`${fieldClass} mt-0 min-w-0 flex-1`}
                         />
                         <button
                           type="button"
                           onClick={() => deleteMaterial(item.id)}
-                          className="shrink-0 rounded-lg px-2.5 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
-                          aria-label={`Delete ${item.label || "material"}`}
+                          className={dangerButtonClass}
+                          aria-label={`删除${item.label || "材料"}`}
                         >
-                          Delete
+                          删除
                         </button>
                       </li>
                     ))}
@@ -574,28 +821,28 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={addMaterial}
-                    className="mt-3 text-sm font-medium text-zinc-700 transition-colors hover:text-zinc-900"
+                    className={`mt-3 ${quietButtonClass}`}
                   >
-                    + Add material
+                    添加材料
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-3 border-t border-zinc-100 px-6 py-4 sm:px-8">
+            <div className={dialogFooterClass}>
               <button
                 type="button"
                 onClick={closeEdit}
-                className="flex-1 rounded-full border border-zinc-200 px-5 py-2.5 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50"
+                className={`${secondaryButtonClass} flex-1`}
               >
-                Cancel
+                取消
               </button>
               <button
                 type="button"
                 onClick={saveChanges}
-                className="flex-1 rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+                className={`${primaryButtonClass} flex-1`}
               >
-                Save Changes
+                保存
               </button>
             </div>
           </div>

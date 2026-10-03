@@ -7,12 +7,23 @@ import {
   useCommonDocuments,
   type CommonDocument,
 } from "@/app/common-documents-context";
-
-const fieldClassName =
-  "mt-1.5 w-full rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 text-[15px] text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-zinc-400";
-
-const labelClassName =
-  "text-xs font-medium uppercase tracking-wide text-zinc-400";
+import { displayCategory } from "@/app/ui-copy";
+import {
+  areaClass,
+  backLinkClass,
+  cardClass,
+  dangerButtonClass,
+  EmptyState,
+  fieldClass,
+  labelClass,
+  leadClass,
+  overlayClass,
+  pageClass,
+  primaryButtonClass,
+  secondaryButtonClass,
+  shellWideClass,
+  titleClass,
+} from "@/app/ui";
 
 type DocumentFormState = {
   name: string;
@@ -22,7 +33,7 @@ type DocumentFormState = {
 
 const emptyForm: DocumentFormState = {
   name: "",
-  category: "Other",
+  category: "其他",
   note: "",
 };
 
@@ -31,7 +42,7 @@ function formatDate(date?: string) {
   const parsed = new Date(date);
   if (Number.isNaN(parsed.getTime())) return date;
 
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("zh-CN", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -39,8 +50,13 @@ function formatDate(date?: string) {
 }
 
 export default function CommonDocumentsPage() {
-  const { documents, addDocument, updateDocument, deleteDocument } =
-    useCommonDocuments();
+  const {
+    documents,
+    hasHydrated,
+    addDocument,
+    updateDocument,
+    deleteDocument,
+  } = useCommonDocuments();
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<CommonDocument | null>(null);
@@ -72,7 +88,7 @@ export default function CommonDocumentsPage() {
     setEditingDoc(doc);
     setForm({
       name: doc.name,
-      category: doc.category,
+      category: displayCategory(doc.category),
       note: doc.note ?? "",
     });
     setIsAddOpen(true);
@@ -105,43 +121,44 @@ export default function CommonDocumentsPage() {
     closeForm();
   }
 
+  if (!hasHydrated) {
+    return <div className={pageClass} />;
+  }
+
   return (
-    <div className="flex flex-1 flex-col bg-[#f5f5f7]">
-      <div className="mx-auto w-full max-w-5xl px-6 py-10 sm:px-8 sm:py-14">
+    <div className={pageClass}>
+      <div className={shellWideClass}>
         <header className="flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <Link
-              href="/dashboard"
-              className="text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800"
-            >
-              ← Back to Dashboard
+            <Link href="/dashboard" className={backLinkClass}>
+              ← 主页
             </Link>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-zinc-900 sm:text-4xl">
-              Common Documents
-            </h1>
-            <p className="mt-2 text-[15px] text-zinc-500">
-              通用材料库 — reusable documents across applications
-            </p>
+            <h1 className={`mt-3 ${titleClass}`}>通用材料</h1>
+            <p className={leadClass}>可在多份申请中复用的材料</p>
           </div>
-          <button
-            type="button"
-            onClick={openAdd}
-            className="shrink-0 rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-zinc-800"
-          >
-            + Add Document
-          </button>
+          {documents.length > 0 ? (
+            <button type="button" onClick={openAdd} className={primaryButtonClass}>
+              添加材料
+            </button>
+          ) : null}
         </header>
 
-        <section className="mt-10 grid gap-4">
+        <section className="mt-8 grid gap-4">
           {documents.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-zinc-200 bg-white px-6 py-12 text-center text-[15px] text-zinc-500">
-              No common documents yet. Add your first reusable document.
-            </p>
+            <EmptyState
+              title="暂无材料"
+              description="添加成绩单、语言成绩或护照。关联后的申请会显示这里的最新内容。"
+              action={
+                <button type="button" onClick={openAdd} className={primaryButtonClass}>
+                  添加材料
+                </button>
+              }
+            />
           ) : (
             documents.map((doc) => (
               <article
                 key={doc.id}
-                className="relative rounded-2xl border border-black/[0.04] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] sm:p-6"
+                className={`relative ${cardClass}`}
               >
                 <div
                   className="absolute right-4 top-4"
@@ -149,7 +166,7 @@ export default function CommonDocumentsPage() {
                 >
                   <button
                     type="button"
-                    aria-label={`${doc.name} options`}
+                    aria-label={`${doc.name}选项`}
                     aria-expanded={openMenuId === doc.id}
                     aria-haspopup="menu"
                     onClick={() =>
@@ -167,7 +184,7 @@ export default function CommonDocumentsPage() {
                   {openMenuId === doc.id ? (
                     <div
                       role="menu"
-                      className="absolute right-0 z-20 mt-1 w-40 overflow-hidden rounded-xl border border-zinc-200 bg-white py-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+                      className="absolute right-0 z-20 mt-1 w-40 overflow-hidden rounded-xl bg-white py-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)] ring-1 ring-black/5"
                     >
                       <button
                         type="button"
@@ -175,7 +192,7 @@ export default function CommonDocumentsPage() {
                         onClick={() => openEdit(doc)}
                         className="block w-full px-3.5 py-2.5 text-left text-sm text-zinc-800 transition-colors hover:bg-zinc-50"
                       >
-                        Edit
+                        编辑
                       </button>
                       <button
                         type="button"
@@ -184,9 +201,9 @@ export default function CommonDocumentsPage() {
                           setOpenMenuId(null);
                           deleteDocument(doc.id);
                         }}
-                        className="block w-full px-3.5 py-2.5 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
+                        className={`block w-full px-3.5 py-2.5 text-left ${dangerButtonClass} hover:bg-red-50`}
                       >
-                        Delete
+                        删除
                       </button>
                     </div>
                   ) : null}
@@ -201,7 +218,7 @@ export default function CommonDocumentsPage() {
                       {doc.name}
                     </h2>
                     <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600">
-                      {doc.category}
+                      {displayCategory(doc.category)}
                     </span>
                   </div>
                   {doc.note ? (
@@ -211,11 +228,10 @@ export default function CommonDocumentsPage() {
                   ) : null}
                   <p className="mt-3 text-sm text-zinc-400">
                     {formatDate(doc.uploadDate)
-                      ? `Uploaded ${formatDate(doc.uploadDate)}`
-                      : "No upload date"}
+                      ? `${formatDate(doc.uploadDate)} 上传`
+                      : "暂无上传日期"}
                     {" · "}
-                    {doc.versions.length} version
-                    {doc.versions.length === 1 ? "" : "s"}
+                    {doc.versions.length} 个版本
                   </p>
                 </Link>
               </article>
@@ -226,27 +242,27 @@ export default function CommonDocumentsPage() {
 
       {isAddOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-8 backdrop-blur-sm sm:px-6"
+          className={overlayClass}
           role="dialog"
           aria-modal="true"
           aria-labelledby={formTitleId}
           onClick={closeForm}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_16px_48px_rgba(0,0,0,0.18)] sm:p-8"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_16px_48px_rgba(0,0,0,0.16)] sm:p-8"
             onClick={(event) => event.stopPropagation()}
           >
             <h2
               id={formTitleId}
               className="text-xl font-semibold tracking-tight text-zinc-900"
             >
-              {editingDoc ? "Edit Document" : "Add Document"}
+              {editingDoc ? "编辑材料" : "添加材料"}
             </h2>
 
             <div className="mt-6 space-y-5">
               <div>
-                <label htmlFor="doc-name" className={labelClassName}>
-                  Document name
+                <label htmlFor="doc-name" className={labelClass}>
+                  材料名称
                 </label>
                 <input
                   id="doc-name"
@@ -255,15 +271,15 @@ export default function CommonDocumentsPage() {
                   onChange={(event) =>
                     setForm((prev) => ({ ...prev, name: event.target.value }))
                   }
-                  placeholder="e.g. Transcript"
-                  className={fieldClassName}
+                  placeholder="例如：成绩单"
+                  className={fieldClass}
                   autoFocus
                 />
               </div>
 
               <div>
-                <label htmlFor="doc-category" className={labelClassName}>
-                  Category
+                <label htmlFor="doc-category" className={labelClass}>
+                  分类
                 </label>
                 <select
                   id="doc-category"
@@ -274,7 +290,7 @@ export default function CommonDocumentsPage() {
                       category: event.target.value,
                     }))
                   }
-                  className={fieldClassName}
+                  className={fieldClass}
                 >
                   {DOCUMENT_CATEGORIES.map((category) => (
                     <option key={category} value={category}>
@@ -285,8 +301,8 @@ export default function CommonDocumentsPage() {
               </div>
 
               <div>
-                <label htmlFor="doc-note" className={labelClassName}>
-                  Note
+                <label htmlFor="doc-note" className={labelClass}>
+                  备注
                 </label>
                 <textarea
                   id="doc-note"
@@ -294,9 +310,9 @@ export default function CommonDocumentsPage() {
                   onChange={(event) =>
                     setForm((prev) => ({ ...prev, note: event.target.value }))
                   }
-                  placeholder="Optional note"
+                  placeholder="选填备注"
                   rows={3}
-                  className={`${fieldClassName} resize-none`}
+                  className={areaClass}
                 />
               </div>
             </div>
@@ -305,16 +321,16 @@ export default function CommonDocumentsPage() {
               <button
                 type="button"
                 onClick={closeForm}
-                className="flex-1 rounded-full border border-zinc-200 px-5 py-2.5 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50"
+                className={`${secondaryButtonClass} flex-1`}
               >
-                Cancel
+                取消
               </button>
               <button
                 type="button"
                 onClick={saveForm}
-                className="flex-1 rounded-full bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+                className={`${primaryButtonClass} flex-1`}
               >
-                {editingDoc ? "Save Changes" : "Add Document"}
+                {editingDoc ? "保存" : "添加材料"}
               </button>
             </div>
           </div>

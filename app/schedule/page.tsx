@@ -1,22 +1,26 @@
 import Link from "next/link";
+import { EmptyState, leadClass, pageClass, primaryButtonClass, shellClass, titleClass } from "@/app/ui";
 
 export default function SchedulePage() {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center bg-white px-6 py-16">
-      <main className="flex w-full max-w-2xl flex-col items-center text-center">
-        <h1 className="text-4xl font-semibold tracking-tight text-zinc-900 sm:text-5xl">
-          Schedule
-        </h1>
-        <p className="mt-4 text-lg text-zinc-500 sm:text-xl">
-          Plan your work sessions and submission dates.
-        </p>
-        <Link
-          href="/"
-          className="mt-10 inline-flex h-12 items-center justify-center rounded-xl border border-zinc-200 px-6 text-base font-medium text-zinc-900 transition-colors hover:border-zinc-300 hover:bg-zinc-50"
-        >
-          Back to Home
-        </Link>
-      </main>
+    <div className={pageClass}>
+      <div className={shellClass}>
+        <header>
+          <h1 className={titleClass}>日程</h1>
+          <p className={leadClass}>安排写作时间和提交日期。</p>
+        </header>
+        <div className="mt-8">
+          <EmptyState
+            title="暂无日程"
+            description="截止日期和节点都在时间轴上，先去那里查看。"
+            action={
+              <Link href="/timeline" className={primaryButtonClass}>
+                查看时间轴
+              </Link>
+            }
+          />
+        </div>
+      </div>
     </div>
   );
 }

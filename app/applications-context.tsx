@@ -6,11 +6,17 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type ReactNode,
   type SetStateAction,
 } from "react";
+import {
+  buildTimelineEvents,
+  type Milestone,
+  type TimelineEvent,
+} from "@/app/timeline-events";
 
 export type MaterialVersion = {
   id: string;
@@ -22,10 +28,22 @@ export type MaterialVersion = {
 
 export type MaterialSource = "project" | "common";
 
+export const MATERIAL_STATUSES = ["草稿", "已完成", "已提交"] as const;
+
+export type MaterialStatus = (typeof MATERIAL_STATUSES)[number];
+
+export type MaterialNote = {
+  id: string;
+  text: string;
+  createdAt: string;
+};
+
 export type ChecklistItem = {
   id: string;
   label: string;
   done: boolean;
+  status: MaterialStatus;
+  notes: MaterialNote[];
   versions: MaterialVersion[];
   /** Defaults to project-specific when omitted. */
   source?: MaterialSource;
@@ -33,6 +51,14 @@ export type ChecklistItem = {
   commonDocumentId?: string;
   /** Reference to a Common Document version by ID. */
   versionId?: string;
+  /** Reference into 文件库. The file itself stays in IndexedDB. */
+  documentId?: string;
+};
+
+export type ApplicationNote = {
+  id: string;
+  text: string;
+  createdAt: string;
 };
 
 export type Application = {
@@ -43,50 +69,16 @@ export type Application = {
   status: string;
   deadline: string;
   checklist: ChecklistItem[];
+  notes: ApplicationNote[];
+  website: string;
+  tuition: string;
+  duration: string;
+  languageRequirement: string;
 };
 
-const APPLICATIONS_STORAGE_KEY = "ai-application-planner:applications";
-
-const psVersions: MaterialVersion[] = [
-  {
-    id: "v-ps-1",
-    name: "PS v1",
-    date: "2027-08-12",
-    note: "Initial draft focusing on research interests.",
-    fileName: "ps-v1.docx",
-  },
-  {
-    id: "v-ps-2",
-    name: "PS v2",
-    date: "2027-09-03",
-    note: "Revised after advisor feedback.",
-    fileName: "ps-v2.docx",
-  },
-  {
-    id: "v-ps-3",
-    name: "PS Final",
-    date: "2027-10-18",
-    note: "Ready for review before submission.",
-    fileName: "ps-final.pdf",
-  },
-  {
-    id: "v-ps-4",
-    name: "PS Submitted",
-    date: "2027-11-02",
-    note: "Submitted with the application package.",
-    fileName: "ps-submitted.pdf",
-  },
-];
-
-function sampleVersions(prefix: string, names: string[]): MaterialVersion[] {
-  return names.map((name, index) => ({
-    id: `${prefix}-v${index + 1}`,
-    name,
-    date: `2027-0${Math.min(index + 6, 9)}-${10 + index}`,
-    note: index === 0 ? "First uploaded version." : undefined,
-    fileName: `${name.toLowerCase().replace(/\s+/g, "-")}.pdf`,
-  }));
-}
+const APPLICATIONS_STORAGE_KEY = "ai-application-planner:applications:v2";
+const LEGACY_APPLICATIONS_STORAGE_KEY = "ai-application-planner:applications";
+const MILESTONES_STORAGE_KEY = "ai-application-planner:milestones:v1";
 
 export function isCommonLinkedMaterial(item: ChecklistItem) {
   return (
@@ -96,146 +88,152 @@ export function isCommonLinkedMaterial(item: ChecklistItem) {
   );
 }
 
-export const initialApplications: Application[] = [
-  {
-    id: "app-1",
-    school: "CUHK",
-    program: "MA Gender Studies",
-    country: "Hong Kong",
-    status: "Waiting Recommendation",
-    deadline: "2027-12-01T23:59",
-    checklist: [
-      {
-        id: "c1-1",
-        label: "CV",
-        done: true,
-        source: "project",
-        versions: sampleVersions("c1-1", ["CV v1", "CV Final"]),
-      },
-      {
-        id: "c1-2",
-        label: "IELTS",
-        done: true,
-        source: "common",
-        commonDocumentId: "doc-ielts",
-        versionId: "doc-ielts-v2",
-        versions: sampleVersions("c1-2", ["IELTS Score Report"]),
-      },
-      {
-        id: "c1-3",
-        label: "PS",
-        done: false,
-        source: "project",
-        versions: psVersions.map((version) => ({
-          ...version,
-          id: `c1-3-${version.id}`,
-        })),
-      },
-      {
-        id: "c1-4",
-        label: "Recommendation",
-        done: false,
-        source: "project",
-        versions: sampleVersions("c1-4", [
-          "Recommendation Request",
-          "Recommendation Draft",
-        ]),
-      },
-    ],
-  },
-  {
-    id: "app-2",
-    school: "HKU",
-    program: "MA Sociology",
-    country: "Hong Kong",
-    status: "Draft",
-    deadline: "2028-01-15T23:59",
-    checklist: [
-      {
-        id: "c2-1",
-        label: "Transcript",
-        done: true,
-        source: "common",
-        commonDocumentId: "doc-transcript",
-        versionId: "doc-transcript-v2",
-        versions: sampleVersions("c2-1", ["Official Transcript"]),
-      },
-      {
-        id: "c2-2",
-        label: "PS",
-        done: false,
-        source: "project",
-        versions: psVersions.map((version) => ({
-          ...version,
-          id: `c2-2-${version.id}`,
-        })),
-      },
-      {
-        id: "c2-3",
-        label: "Passport",
-        done: false,
-        source: "common",
-        commonDocumentId: "doc-passport",
-        versionId: "doc-passport-v1",
-        versions: sampleVersions("c2-3", ["Passport Scan"]),
-      },
-    ],
-  },
-  {
-    id: "app-3",
-    school: "LSE",
-    program: "MSc Gender",
-    country: "United Kingdom",
-    status: "Submitted",
-    deadline: "2027-11-30T23:59",
-    checklist: [
-      {
-        id: "c3-1",
-        label: "CV",
-        done: true,
-        source: "project",
-        versions: sampleVersions("c3-1", ["CV Submitted"]),
-      },
-      {
-        id: "c3-2",
-        label: "PS",
-        done: true,
-        source: "project",
-        versions: psVersions.map((version) => ({
-          ...version,
-          id: `c3-2-${version.id}`,
-        })),
-      },
-      {
-        id: "c3-3",
-        label: "IELTS",
-        done: true,
-        source: "common",
-        commonDocumentId: "doc-ielts",
-        versionId: "doc-ielts-v2",
-        versions: sampleVersions("c3-3", ["IELTS Score Report"]),
-      },
-    ],
-  },
-];
+export { type Milestone, type TimelineEvent } from "@/app/timeline-events";
 
 export function createId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function normalizeMaterialNotes(notes: unknown): MaterialNote[] {
+  if (!Array.isArray(notes)) return [];
+  return notes.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const text =
+      "text" in item && typeof item.text === "string" ? item.text.trim() : "";
+    if (!text) return [];
+    const id =
+      "id" in item && typeof item.id === "string" && item.id
+        ? item.id
+        : createId("mnote");
+    const createdAt =
+      "createdAt" in item &&
+      typeof item.createdAt === "string" &&
+      item.createdAt
+        ? item.createdAt
+        : new Date().toISOString();
+    return [{ id, text, createdAt }];
+  });
+}
+
+function normalizeMaterialStatus(
+  status: unknown,
+  done: boolean,
+): MaterialStatus {
+  if (
+    status === "草稿" ||
+    status === "已完成" ||
+    status === "已提交"
+  ) {
+    return status;
+  }
+  return done ? "已完成" : "草稿";
+}
+
 function normalizeChecklistItem(item: ChecklistItem): ChecklistItem {
+  const status = normalizeMaterialStatus(item.status, item.done);
   return {
     ...item,
     versions: item.versions ?? [],
     source: item.source ?? "project",
+    notes: normalizeMaterialNotes(item.notes),
+    status,
+    done: status !== "草稿",
+    documentId:
+      typeof item.documentId === "string" && item.documentId
+        ? item.documentId
+        : undefined,
   };
 }
 
+function normalizeNotes(notes: unknown): ApplicationNote[] {
+  if (Array.isArray(notes)) {
+    return notes.flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const text = "text" in item && typeof item.text === "string" ? item.text.trim() : "";
+      if (!text) return [];
+      const id =
+        "id" in item && typeof item.id === "string" && item.id
+          ? item.id
+          : createId("note");
+      const createdAt =
+        "createdAt" in item && typeof item.createdAt === "string" && item.createdAt
+          ? item.createdAt
+          : new Date().toISOString();
+      return [{ id, text, createdAt }];
+    });
+  }
+
+  if (typeof notes === "string" && notes.trim()) {
+    return [
+      {
+        id: createId("note"),
+        text: notes.trim(),
+        createdAt: new Date().toISOString(),
+      },
+    ];
+  }
+
+  return [];
+}
+
 function normalizeApplications(apps: Application[]): Application[] {
-  return apps.map((app) => ({
-    ...app,
-    checklist: app.checklist.map(normalizeChecklistItem),
-  }));
+  return apps.map((app) => {
+    const { milestones: _nested, ...rest } = app as Application & {
+      milestones?: Milestone[];
+      notes?: unknown;
+    };
+    return {
+      ...rest,
+      checklist: (rest.checklist ?? []).map(normalizeChecklistItem),
+      notes: normalizeNotes(rest.notes),
+      website: rest.website ?? "",
+      tuition: rest.tuition ?? "",
+      duration: rest.duration ?? "",
+      languageRequirement: rest.languageRequirement ?? "",
+    };
+  });
+}
+
+function extractNestedMilestones(apps: unknown): Milestone[] {
+  if (!Array.isArray(apps)) return [];
+  const extracted: Milestone[] = [];
+  for (const app of apps) {
+    if (!app || typeof app !== "object" || !("milestones" in app)) continue;
+    const nested = (app as { milestones?: Milestone[] }).milestones;
+    if (!Array.isArray(nested)) continue;
+    for (const item of nested) {
+      if (!item?.title || !item?.date) continue;
+      extracted.push({
+        id: item.id || createId("ms"),
+        title: item.title,
+        date: item.date,
+      });
+    }
+  }
+  return extracted;
+}
+
+function mergeMilestones(primary: Milestone[], extra: Milestone[]) {
+  const byId = new Map<string, Milestone>();
+  for (const item of [...primary, ...extra]) {
+    byId.set(item.id, item);
+  }
+  return [...byId.values()];
+}
+
+function readStoredMilestones(): Milestone[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(MILESTONES_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Milestone[];
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter(
+      (item) => item && typeof item.title === "string" && typeof item.date === "string",
+    );
+  } catch {
+    return null;
+  }
 }
 
 function readStoredApplications(): Application[] | null {
@@ -253,6 +251,7 @@ function readStoredApplications(): Application[] | null {
 
 type ApplicationsContextValue = {
   applications: Application[];
+  hasHydrated: boolean;
   setApplications: Dispatch<SetStateAction<Application[]>>;
   getApplication: (applicationId: string) => Application | undefined;
   getMaterial: (
@@ -272,10 +271,13 @@ type ApplicationsContextValue = {
         ChecklistItem,
         | "label"
         | "done"
+        | "status"
+        | "notes"
         | "versions"
         | "source"
         | "commonDocumentId"
         | "versionId"
+        | "documentId"
       >
     >,
   ) => void;
@@ -289,6 +291,21 @@ type ApplicationsContextValue = {
     applicationId: string,
     materialId: string,
   ) => void;
+  addApplication: (
+    input: Omit<
+      Application,
+      "id" | "notes" | "website" | "tuition" | "duration" | "languageRequirement"
+    > & {
+      notes?: ApplicationNote[];
+      website?: string;
+      tuition?: string;
+      duration?: string;
+      languageRequirement?: string;
+    },
+  ) => string;
+  addMilestone: (milestone: Omit<Milestone, "id">) => void;
+  milestones: Milestone[];
+  timelineEvents: TimelineEvent<Application>[];
   deleteApplication: (applicationId: string) => void;
   addMaterialVersion: (
     applicationId: string,
@@ -302,22 +319,44 @@ const ApplicationsContext = createContext<ApplicationsContextValue | null>(
 );
 
 export function ApplicationsProvider({ children }: { children: ReactNode }) {
-  const [applications, setApplications] = useState(initialApplications);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [hasHydrated, setHasHydrated] = useState(false);
+  const persistReady = useRef(false);
 
   useEffect(() => {
+    window.localStorage.removeItem(LEGACY_APPLICATIONS_STORAGE_KEY);
+    const rawApps = window.localStorage.getItem(APPLICATIONS_STORAGE_KEY);
+    let nested: Milestone[] = [];
+    if (rawApps) {
+      try {
+        nested = extractNestedMilestones(JSON.parse(rawApps));
+      } catch {
+        nested = [];
+      }
+    }
     const stored = readStoredApplications();
     if (stored) setApplications(stored);
+    const storedMilestones = readStoredMilestones() ?? [];
+    setMilestones(mergeMilestones(storedMilestones, nested));
     setHasHydrated(true);
   }, []);
 
   useEffect(() => {
     if (!hasHydrated) return;
+    if (!persistReady.current) {
+      persistReady.current = true;
+      return;
+    }
     window.localStorage.setItem(
       APPLICATIONS_STORAGE_KEY,
       JSON.stringify(applications),
     );
-  }, [applications, hasHydrated]);
+    window.localStorage.setItem(
+      MILESTONES_STORAGE_KEY,
+      JSON.stringify(milestones),
+    );
+  }, [applications, milestones, hasHydrated]);
 
   const getApplication = useCallback(
     (applicationId: string) =>
@@ -346,11 +385,16 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
             ? app
             : {
                 ...app,
-                checklist: app.checklist.map((item) =>
-                  item.id === materialId
-                    ? { ...item, done: !item.done }
-                    : item,
-                ),
+                checklist: app.checklist.map((item) => {
+                  if (item.id !== materialId) return item;
+                  const done = !item.done;
+                  const status: MaterialStatus = done
+                    ? item.status === "已提交"
+                      ? "已提交"
+                      : "已完成"
+                    : "草稿";
+                  return { ...item, done, status };
+                }),
               },
         ),
       );
@@ -376,10 +420,13 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
           ChecklistItem,
           | "label"
           | "done"
+          | "status"
+          | "notes"
           | "versions"
           | "source"
           | "commonDocumentId"
           | "versionId"
+          | "documentId"
         >
       >,
     ) => {
@@ -389,9 +436,29 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
             ? app
             : {
                 ...app,
-                checklist: app.checklist.map((item) =>
-                  item.id === materialId ? { ...item, ...updates } : item,
-                ),
+                checklist: app.checklist.map((item) => {
+                  if (item.id !== materialId) return item;
+                  const next = { ...item, ...updates };
+                  if ("documentId" in updates && !updates.documentId) {
+                    delete next.documentId;
+                  }
+                  if (
+                    updates.status !== undefined &&
+                    updates.done === undefined
+                  ) {
+                    next.done = updates.status !== "草稿";
+                  } else if (
+                    updates.done !== undefined &&
+                    updates.status === undefined
+                  ) {
+                    next.status = updates.done
+                      ? item.status === "已提交"
+                        ? "已提交"
+                        : "已完成"
+                      : "草稿";
+                  }
+                  return next;
+                }),
               },
         ),
       );
@@ -440,6 +507,53 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const addApplication = useCallback(
+    (
+      input: Omit<
+        Application,
+        | "id"
+        | "notes"
+        | "website"
+        | "tuition"
+        | "duration"
+        | "languageRequirement"
+      > & {
+        notes?: ApplicationNote[];
+        website?: string;
+        tuition?: string;
+        duration?: string;
+        languageRequirement?: string;
+      },
+    ) => {
+    const id = createId("app");
+    setApplications((prev) => [
+      {
+        ...input,
+        id,
+        checklist: input.checklist.map(normalizeChecklistItem),
+        notes: input.notes ?? [],
+        website: input.website ?? "",
+        tuition: input.tuition ?? "",
+        duration: input.duration ?? "",
+        languageRequirement: input.languageRequirement ?? "",
+      },
+      ...prev,
+    ]);
+    return id;
+  },
+  []);
+
+  const addMilestone = useCallback((milestone: Omit<Milestone, "id">) => {
+    setMilestones((prev) => [
+      ...prev,
+      {
+        id: createId("ms"),
+        title: milestone.title,
+        date: milestone.date,
+      },
+    ]);
+  }, []);
+
   const deleteApplication = useCallback((applicationId: string) => {
     setApplications((prev) => prev.filter((app) => app.id !== applicationId));
   }, []);
@@ -477,9 +591,15 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const timelineEvents = useMemo(
+    () => buildTimelineEvents(applications, milestones),
+    [applications, milestones],
+  );
+
   const value = useMemo(
     () => ({
       applications,
+      hasHydrated,
       setApplications,
       getApplication,
       getMaterial,
@@ -488,11 +608,16 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
       updateMaterial,
       linkMaterialToCommonDocument,
       unlinkMaterialFromCommonDocument,
+      addApplication,
+      addMilestone,
+      milestones,
+      timelineEvents,
       deleteApplication,
       addMaterialVersion,
     }),
     [
       applications,
+      hasHydrated,
       getApplication,
       getMaterial,
       toggleChecklistItem,
@@ -500,6 +625,10 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
       updateMaterial,
       linkMaterialToCommonDocument,
       unlinkMaterialFromCommonDocument,
+      addApplication,
+      addMilestone,
+      milestones,
+      timelineEvents,
       deleteApplication,
       addMaterialVersion,
     ],
