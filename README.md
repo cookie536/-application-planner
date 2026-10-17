@@ -1,36 +1,152 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Application Planner
 
-## Getting Started
+A lightweight application management tool for graduate school applicants.
 
-First, run the development server:
+Application Planner helps users organize programs, deadlines, required materials, and application progress in one place — while exploring how AI can reduce the manual work of turning scattered admission information into actionable application data.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+🔗 **Live Demo:** https://grad-application-planner.netlify.app
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Why I Built This
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+While preparing my own graduate school applications, I found that the hardest part was not simply keeping a checklist.
 
-## Learn More
+Information was scattered across university websites, program pages, PDFs, and application portals. For every program, I repeatedly had to figure out:
 
-To learn more about Next.js, take a look at the following resources:
+- When is the deadline?
+- What documents are required?
+- Which materials are optional or recommended?
+- What have I already completed?
+- What should I work on next?
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The real problem gradually became clear:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+> How can scattered, unstructured admission information be turned into a personal application plan?
 
-## Deploy on Vercel
+Application Planner started as a simple application tracker and gradually evolved around this question.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Features
+
+### Application Dashboard
+
+Manage multiple graduate applications in one place, including:
+
+- University
+- Program
+- Country / Region
+- Deadline
+- Application status
+- Required materials
+
+### Materials Checklist
+
+Track documents required for each application, such as:
+
+- Personal Statement
+- CV / Resume
+- Transcript
+- Recommendation Letters
+- Language Test
+- Passport / ID
+
+### Timeline
+
+View important application deadlines and milestones across different programs in one timeline.
+
+### AI-assisted Information Extraction
+
+Application Planner is also experimenting with AI-assisted extraction of admission information.
+
+The current workflow is:
+
+**University information → AI extraction → Structured fields → User review → Save**
+
+The goal is to extract information such as:
+
+- Deadlines
+- Required documents
+- Admission requirements
+- Other application-related information
+
+Because application deadlines and document requirements are high-stakes information, AI-generated results are reviewed by the user before being saved.
+
+---
+
+## AI: Current Status
+
+The AI extraction feature is still experimental.
+
+Current testing shows that extraction can become unreliable when:
+
+- A page contains multiple deadlines
+- Required, recommended, and optional documents appear together
+- Admission information is long or poorly structured
+- Different universities describe similar requirements differently
+
+Instead of fully automating the process, the current design keeps the user in control of verification and final confirmation.
+
+This project is also an experiment in a broader product question:
+
+> Where should AI reduce manual work, and where should users retain control?
+
+---
+
+## Product Iteration
+
+The first version of Application Planner focused mainly on manually managing applications and checklists.
+
+After using it during my own application process, I realized that the more time-consuming problem happened **before** information entered the planner:
+
+**Official website → Understand information → Identify what matters → Enter it into the planner**
+
+This led me to shift the product toward:
+
+**Unstructured information → Structured application data → Next actions**
+
+AI extraction was introduced as an early attempt to reduce this gap.
+
+---
+
+## Tech Stack
+
+- Next.js
+- TypeScript
+- React
+- AI API
+- Netlify
+- Cursor / Codex
+
+The project was built with an AI-assisted coding workflow.
+
+My focus has been on defining the product, designing interactions, testing real use cases, identifying failures, and iterating on the experience while using AI coding tools to implement the product.
+
+---
+
+## Current Status
+
+**V1 is live.**
+
+🔗 https://grad-application-planner.netlify.app
+
+Current development focuses on improving:
+
+- AI extraction reliability
+- Multiple-deadline handling
+- Required / Recommended / Optional document classification
+- User verification before data is saved
+- Turning application information into clearer next actions
+
+---
+
+## About
+
+Application Planner is an independent side project built from a problem I encountered during my own graduate application process.
+
+It represents my first attempt to take a product through the full process of:
+
+**Problem discovery → Product definition → MVP → Real-world use → Iteration → AI integration → Deployment**
+
+The project is still evolving, but the goal is simple: build something that is genuinely useful in my own application process rather than a demo created only for a portfolio.
