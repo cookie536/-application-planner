@@ -1,3 +1,4 @@
+<img width="1586" height="992" alt="image" src="https://github.com/user-attachments/assets/c2e327f8-7a53-4474-96c3-879e305c9185" />
 # Application Planner
 
 A lightweight application management tool for graduate school applicants.
