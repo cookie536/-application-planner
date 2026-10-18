@@ -12,9 +12,9 @@ export function ApplicationMaterials({
   onToggle: (materialId: string) => void;
 }) {
   return (
-    <section aria-labelledby="materials-title">
+    <section aria-labelledby={`materials-title-${application.id}`}>
       <h2
-        id="materials-title"
+        id={`materials-title-${application.id}`}
         className="text-xl font-semibold tracking-tight text-zinc-900"
       >
         材料

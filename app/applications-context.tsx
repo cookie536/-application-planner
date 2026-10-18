@@ -12,6 +12,7 @@ import {
   type ReactNode,
   type SetStateAction,
 } from "react";
+import { createSampleApplications } from "@/app/sample-applications";
 import {
   buildTimelineEvents,
   type Milestone,
@@ -62,6 +63,7 @@ export type ApplicationNote = {
 };
 
 export type Application = {
+  isDemo?: boolean;
   id: string;
   school: string;
   program: string;
@@ -252,6 +254,8 @@ function readStoredApplications(): Application[] | null {
 type ApplicationsContextValue = {
   applications: Application[];
   hasHydrated: boolean;
+  loadSampleApplications: () => void;
+  clearSampleApplications: () => void;
   setApplications: Dispatch<SetStateAction<Application[]>>;
   getApplication: (applicationId: string) => Application | undefined;
   getMaterial: (
@@ -357,6 +361,18 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
       JSON.stringify(milestones),
     );
   }, [applications, milestones, hasHydrated]);
+
+  const loadSampleApplications = useCallback(() => {
+    if (!hasHydrated) return;
+    // Check current state inside the updater: repeated clicks cannot replace data.
+    setApplications((current) =>
+      current.length === 0 ? createSampleApplications() : current,
+    );
+  }, [hasHydrated]);
+
+  const clearSampleApplications = useCallback(() => {
+    setApplications((current) => current.filter((app) => app.isDemo !== true));
+  }, []);
 
   const getApplication = useCallback(
     (applicationId: string) =>
@@ -600,6 +616,8 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
     () => ({
       applications,
       hasHydrated,
+      loadSampleApplications,
+      clearSampleApplications,
       setApplications,
       getApplication,
       getMaterial,
@@ -618,6 +636,8 @@ export function ApplicationsProvider({ children }: { children: ReactNode }) {
     [
       applications,
       hasHydrated,
+      loadSampleApplications,
+      clearSampleApplications,
       getApplication,
       getMaterial,
       toggleChecklistItem,

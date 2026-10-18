@@ -94,6 +94,8 @@ export default function DashboardPage() {
   const {
     applications,
     hasHydrated,
+    loadSampleApplications,
+    clearSampleApplications,
     addApplication,
     toggleChecklistItem,
     updateApplication,
@@ -308,15 +310,29 @@ export default function DashboardPage() {
           </div>
         </header>
 
+        {applications.some((app) => app.isDemo) ? (
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-zinc-100 px-5 py-4">
+            <p className="text-sm text-zinc-600">示例数据 · 学校、截止日期和材料进度仅用于演示，可自由编辑。</p>
+            <button type="button" onClick={clearSampleApplications} className={quietButtonClass}>
+              清除示例数据
+            </button>
+          </div>
+        ) : null}
+
         {applications.length === 0 ? (
           <div className="mt-8">
             <EmptyState
-              title="暂无申请"
-              description="创建第一份申请，开始跟踪截止日期、材料和进度。"
+              title="开始规划你的申请"
+              description="添加你的第一个申请，或通过示例数据快速了解 Application Planner。"
               action={
-                <button type="button" onClick={openAdd} className={primaryButtonClass}>
-                  添加申请
-                </button>
+                <div className="flex flex-wrap justify-center gap-3">
+                  <button type="button" onClick={openAdd} className={primaryButtonClass}>
+                    添加申请
+                  </button>
+                  <button type="button" onClick={loadSampleApplications} className={secondaryButtonClass}>
+                    查看示例
+                  </button>
+                </div>
               }
             />
           </div>
@@ -386,6 +402,7 @@ export default function DashboardPage() {
                 <Link href={`/applications/${app.id}`} className="block">
                   <h2 className="text-xl font-semibold tracking-tight text-zinc-950">
                     {app.school.trim() || "未填写"}
+                    {app.isDemo ? <span className="ml-2 inline-flex rounded-full bg-zinc-100 px-2 py-0.5 align-middle text-xs font-medium text-zinc-500">示例</span> : null}
                   </h2>
                   <p className="mt-1 text-base font-medium text-zinc-800">
                     {app.program.trim() || "未填写"}
